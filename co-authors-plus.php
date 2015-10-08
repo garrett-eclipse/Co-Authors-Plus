@@ -857,17 +857,27 @@ class CoAuthors_Plus {
 	function delete_user_action( $delete_id ) {
 		global $wpdb;
 
+
+		// Get User, Coauthor and Coauthor Term objects
+		$delete_user = get_user_by( 'id', $delete_id );
+		$delete_coauthor = $this->get_coauthor_by( 'id', $delete_id );
+		$delete_coauthor_term = $this->get_author_term( $delete_coauthor );
+
+		// Get reassign user ID if available
 		$reassign_id = isset( $_POST['reassign_user'] ) ? absint( $_POST['reassign_user'] ) : false;
 
 		// If reassign posts, do that -- use coauthors_update_post
 		if ( $reassign_id ) {
 			// Get posts belonging to deleted author
 			$reassign_user = get_user_by( 'id', $reassign_id );
+
 			// Set to new author
 			if ( is_object( $reassign_user ) ) {
-				$post_ids = $wpdb->get_col( $wpdb->prepare( "SELECT ID FROM $wpdb->posts WHERE post_author = %d", $delete_id ) );
+				// Look-up posts by Coauthor Term
+				$posts = get_posts( array( 'post_type' => 'any', 'posts_per_page' => -1, 'post_status' => 'any', 'tax_query' => array( array( 'taxonomy' => 'author', 'field' => 'slug', 'terms' => $delete_coauthor_term->slug ) ) ) );
 
 				if ( $post_ids ) {
+					// Loop through posts and add reassign user as coauthor.
 					foreach ( $post_ids as $post_id ) {
 						$this->add_coauthors( $post_id, array( $reassign_user->user_login ), true );
 					}
@@ -875,10 +885,9 @@ class CoAuthors_Plus {
 			}
 		}
 
-		$delete_user = get_user_by( 'id', $delete_id );
 		if ( is_object( $delete_user ) ) {
-			// Delete term
-			wp_delete_term( $delete_user->user_login, $this->coauthor_taxonomy );
+			// Delete Coauthor Term
+			wp_delete_term( $delete_coauthor_term->term_id, $this->coauthor_taxonomy );
 		}
 	}
 
